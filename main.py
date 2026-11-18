@@ -22,34 +22,34 @@ app = FastAPI(lifespan=lifespan)
 SIMILARITY_QUERY = """
     with mine as (
         select distinct t.artist_id
-        from scrobbles s join tracks t on t.id = s.track_id
+        from engine.plays s join engine.tracks t on t.id = s.track_id
         where s.user_id = %(user_id)s
     ), neighbors as (
         select distinct s.user_id
-        from scrobbles s join tracks t on t.id = s.track_id
+        from engine.plays s join engine.tracks t on t.id = s.track_id
         where s.user_id <> %(user_id)s and t.artist_id in (select artist_id from mine)
     )
 
     select a.name as artist, t.title, t.mbid::text as mbid, count(distinct s.user_id) as listeners,
     (select count(*) from neighbors) as neighbors
     
-    from scrobbles s
+    from engine.plays s
     join neighbors n on n.user_id = s.user_id
-    join tracks t on t.id = s.track_id
-    join artists a on a.id = t.artist_id
+    join engine.tracks t on t.id = s.track_id
+    join engine.artists a on a.id = t.artist_id
     where t.artist_id not in (select artist_id from mine)
-    group by t.id, a.id
+    group by t.id, t.title, t.mbid, a.name
     order by listeners desc, t.title
     limit %(limit)s
 """
 
 REDISCOVER_QUERY = """
     select a.name as artist, t.title, t.mbid::text as mbid, count(*) as plays
-    from scrobbles s
-    join tracks t on t.id = s.track_id
-    join artists a on a.id = t.artist_id
+    from engine.plays s
+    join engine.tracks t on t.id = s.track_id
+    join engine.artists a on a.id = t.artist_id
     where s.user_id = %(user_id)s
-    group by t.id, a.id
+    group by t.id, t.title, t.mbid, a.name
     having count(*) >= %(min_plays)s and max(s.played_at) < now() - make_interval(days => %(days)s)
     order by plays desc, t.title
     limit %(limit)s
